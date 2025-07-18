@@ -13,7 +13,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-model = load_model("ml_stock_model.pkl")
+model = None
+
 
 @app.get("/signals")
 def get_signals():
@@ -22,7 +23,7 @@ def get_signals():
             signals = json.load(f)
         for signal in signals:
             reason = signal.get("reason", "")
-            signal["confidence_score"] = score_signal(reason, model)
+            signal["confidence_score"] = "N/A"
             chart_path = f"charts/{signal['ticker']}_chart.html"
             if not os.path.exists(chart_path):
                 try:
