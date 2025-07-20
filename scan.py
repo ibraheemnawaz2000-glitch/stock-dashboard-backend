@@ -25,10 +25,10 @@ def calculate_indicators(df):
     bb = ta.volatility.BollingerBands(close=df['Close'], window=20)
     df['bb_upper'] = bb.bollinger_hband().values.ravel()
     df['bb_lower'] = bb.bollinger_lband().values.ravel()
-    df['volume'] = df['Volume'].rolling(window=5).mean().fillna(df['Volume'])
+    df['volume'] = df['Volume'].rolling(window=5).mean().fillna(df['Volume']).values.ravel()
     return df
 
-def detect_strategies(row):
+def detect_strategies(row, df):
     tags = []
     if row['rsi'] < 35:
         tags.append("RSI_Oversold")
@@ -40,7 +40,7 @@ def detect_strategies(row):
         tags.append("MACD_Bullish")
     if row['Close'] > row['bb_upper']:
         tags.append("Breakout_BB_Upper")
-    if row['volume'] > 1.5 * row['volume'].mean():
+    if row['volume'] > 1.5 * df['volume'].mean():
         tags.append("Volume_Spike")
     return tags
 
@@ -69,7 +69,7 @@ def main():
             X = pd.DataFrame([features])
             proba = model.predict_proba(X)[0][1]
 
-            strategy_tags = detect_strategies(latest)
+            strategy_tags = detect_strategies(latest, df)
             if proba >= 0.85:
                 signals.append({
                     "ticker": ticker,
