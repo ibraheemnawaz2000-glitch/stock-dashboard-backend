@@ -1,3 +1,4 @@
+
 import json
 import os
 from datetime import datetime
@@ -12,9 +13,10 @@ MODEL_FILE = "ml_stock_model.pkl"
 
 # Dynamically pulled watchlist from Finviz
 WATCHLIST = fetch_finviz_reversals()
-print("🔍 Tickers from Finviz:", WATCHLIST)
+print(f"🔍 Tickers from Finviz: {WATCHLIST}")
 if not WATCHLIST:
     WATCHLIST = ["AAPL", "TSLA", "NVDA", "GOOGL", "MSFT"]
+    print("⚠️ Using fallback watchlist.")
 
 def calculate_indicators(df):
     df['rsi'] = ta.momentum.RSIIndicator(close=df['Close'], window=14).rsi().values.ravel()
@@ -41,7 +43,7 @@ def detect_strategies(row):
         tags.append("MACD_Bullish")
     if row['Close'] > row['bb_upper']:
         tags.append("Breakout_BB_Upper")
-    if row['volume'] > 1.5 * row['volume'].mean():
+    if row['volume'] > 1.5 * pd.Series(row['volume']).mean():
         tags.append("Volume_Spike")
     return tags
 
@@ -59,12 +61,12 @@ def main():
             latest = df.iloc[-1]
 
             features = {
-                "rsi": latest["rsi"],
-                "macd": latest["macd"],
-                "macd_signal": latest["macd_signal"],
-                "ema5": latest["ema5"],
-                "ema20": latest["ema20"],
-                "volume": latest["volume"]
+                "rsi": float(latest["rsi"]),
+                "macd": float(latest["macd"]),
+                "macd_signal": float(latest["macd_signal"]),
+                "ema5": float(latest["ema5"]),
+                "ema20": float(latest["ema20"]),
+                "volume": float(latest["volume"])
             }
 
             X = pd.DataFrame([features])
