@@ -1,4 +1,3 @@
-
 import json
 import os
 from datetime import datetime
@@ -15,20 +14,24 @@ MODEL_FILE = "ml_stock_model.pkl"
 WATCHLIST = fetch_finviz_reversals()
 print(f"🔍 Tickers from Finviz: {WATCHLIST}")
 if not WATCHLIST:
-    WATCHLIST = ["AAPL", "TSLA", "NVDA", "GOOGL", "MSFT"]
     print("⚠️ Using fallback watchlist.")
+    WATCHLIST = ["AAPL", "TSLA", "NVDA", "GOOGL", "MSFT"]
 
 def calculate_indicators(df):
-    df['rsi'] = ta.momentum.RSIIndicator(close=df['Close'], window=14).rsi().values.ravel()
+    df['rsi'] = ta.momentum.RSIIndicator(close=df['Close'], window=14).rsi()
     macd = ta.trend.MACD(close=df['Close'])
-    df['macd'] = macd.macd().values.ravel()
-    df['macd_signal'] = macd.macd_signal().values.ravel()
-    df['ema5'] = ta.trend.EMAIndicator(close=df['Close'], window=5).ema_indicator().values.ravel()
-    df['ema20'] = ta.trend.EMAIndicator(close=df['Close'], window=20).ema_indicator().values.ravel()
+    df['macd'] = macd.macd()
+    df['macd_signal'] = macd.macd_signal()
+    df['ema5'] = ta.trend.EMAIndicator(close=df['Close'], window=5).ema_indicator()
+    df['ema20'] = ta.trend.EMAIndicator(close=df['Close'], window=20).ema_indicator()
     bb = ta.volatility.BollingerBands(close=df['Close'], window=20)
-    df['bb_upper'] = bb.bollinger_hband().values.ravel()
-    df['bb_lower'] = bb.bollinger_lband().values.ravel()
-    df['volume'] = df['Volume'].rolling(window=5).mean().fillna(df['Volume']).values.ravel()
+    df['bb_upper'] = bb.bollinger_hband()
+    df['bb_lower'] = bb.bollinger_lband()
+    df['volume'] = df['Volume'].rolling(window=5).mean().fillna(df['Volume'])
+
+    for col in ['rsi', 'macd', 'macd_signal', 'ema5', 'ema20', 'bb_upper', 'bb_lower']:
+        df[col] = df[col].values.ravel()
+
     return df
 
 def detect_strategies(row):
@@ -43,7 +46,7 @@ def detect_strategies(row):
         tags.append("MACD_Bullish")
     if row['Close'] > row['bb_upper']:
         tags.append("Breakout_BB_Upper")
-    if row['volume'] > 1.5 * pd.Series(row['volume']).mean():
+    if row['volume'] > 1.5 * row['volume'].mean():
         tags.append("Volume_Spike")
     return tags
 
@@ -61,12 +64,12 @@ def main():
             latest = df.iloc[-1]
 
             features = {
-                "rsi": float(latest["rsi"]),
-                "macd": float(latest["macd"]),
-                "macd_signal": float(latest["macd_signal"]),
-                "ema5": float(latest["ema5"]),
-                "ema20": float(latest["ema20"]),
-                "volume": float(latest["volume"])
+                "rsi": latest["rsi"],
+                "macd": latest["macd"],
+                "macd_signal": latest["macd_signal"],
+                "ema5": latest["ema5"],
+                "ema20": latest["ema20"],
+                "volume": latest["volume"]
             }
 
             X = pd.DataFrame([features])
