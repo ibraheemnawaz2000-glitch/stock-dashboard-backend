@@ -18,21 +18,18 @@ if not WATCHLIST:
     WATCHLIST = ["AAPL", "TSLA", "NVDA", "GOOGL", "MSFT"]
 
 def calculate_indicators(df):
-    df['rsi'] = ta.momentum.RSIIndicator(close=df['Close'], window=14).rsi()
+    df['rsi'] = ta.momentum.RSIIndicator(close=df['Close'], window=14).rsi().values.ravel()
     macd = ta.trend.MACD(close=df['Close'])
-    df['macd'] = macd.macd()
-    df['macd_signal'] = macd.macd_signal()
-    df['ema5'] = ta.trend.EMAIndicator(close=df['Close'], window=5).ema_indicator()
-    df['ema20'] = ta.trend.EMAIndicator(close=df['Close'], window=20).ema_indicator()
+    df['macd'] = macd.macd().values.ravel()
+    df['macd_signal'] = macd.macd_signal().values.ravel()
+    df['ema5'] = ta.trend.EMAIndicator(close=df['Close'], window=5).ema_indicator().values.ravel()
+    df['ema20'] = ta.trend.EMAIndicator(close=df['Close'], window=20).ema_indicator().values.ravel()
     bb = ta.volatility.BollingerBands(close=df['Close'], window=20)
-    df['bb_upper'] = bb.bollinger_hband()
-    df['bb_lower'] = bb.bollinger_lband()
-    df['volume'] = df['Volume'].rolling(window=5).mean().fillna(df['Volume'])
-
-    for col in ['rsi', 'macd', 'macd_signal', 'ema5', 'ema20', 'bb_upper', 'bb_lower']:
-        df[col] = df[col].values.ravel()
-
+    df['bb_upper'] = bb.bollinger_hband().values.ravel()
+    df['bb_lower'] = bb.bollinger_lband().values.ravel()
+    df['volume'] = df['Volume'].rolling(window=5).mean().fillna(df['Volume']).values.ravel()
     return df
+
 
 def detect_strategies(row):
     tags = []
