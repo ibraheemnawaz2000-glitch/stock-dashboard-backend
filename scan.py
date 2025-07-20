@@ -12,6 +12,7 @@ MODEL_FILE = "ml_stock_model.pkl"
 
 # Dynamically pulled watchlist from Finviz
 WATCHLIST = fetch_finviz_reversals()
+print("🔍 Tickers from Finviz:", WATCHLIST)
 if not WATCHLIST:
     WATCHLIST = ["AAPL", "TSLA", "NVDA", "GOOGL", "MSFT"]
 
@@ -28,7 +29,7 @@ def calculate_indicators(df):
     df['volume'] = df['Volume'].rolling(window=5).mean().fillna(df['Volume']).values.ravel()
     return df
 
-def detect_strategies(row, df):
+def detect_strategies(row):
     tags = []
     if row['rsi'] < 35:
         tags.append("RSI_Oversold")
@@ -40,7 +41,7 @@ def detect_strategies(row, df):
         tags.append("MACD_Bullish")
     if row['Close'] > row['bb_upper']:
         tags.append("Breakout_BB_Upper")
-    if row['volume'] > 1.5 * df['volume'].mean():
+    if row['volume'] > 1.5 * row['volume'].mean():
         tags.append("Volume_Spike")
     return tags
 
@@ -69,7 +70,7 @@ def main():
             X = pd.DataFrame([features])
             proba = model.predict_proba(X)[0][1]
 
-            strategy_tags = detect_strategies(latest, df)
+            strategy_tags = detect_strategies(latest)
             if proba >= 0.85:
                 signals.append({
                     "ticker": ticker,
