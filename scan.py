@@ -1,21 +1,30 @@
+
 import json
 import os
 from datetime import datetime
-import yfinance as yf
 import pandas as pd
-import ta
+from polygon_api import get_ohlcv, get_top_movers
 from ml_utils import load_model
-from finviz_scraper import fetch_finviz_reversals
+import ta
 
 SIGNALS_FILE = "data/signals.json"
 MODEL_FILE = "ml_stock_model.pkl"
 
-# Dynamically pulled watchlist from Finviz
-WATCHLIST = fetch_finviz_reversals()
-print(f"🔍 Tickers from Finviz: {WATCHLIST}")
-if not WATCHLIST:
-    print("⚠️ Using fallback watchlist.")
-    WATCHLIST = ["AAPL", "TSLA", "NVDA", "GOOGL", "MSFT"]
+def detect_bullish_reversal(df):
+    patterns = []
+    latest = df.iloc[-1]
+
+    body = abs(latest['Close'] - latest['Open'])
+    candle_range = latest['High'] - latest['Low']
+    lower_shadow = min(latest['Open'], latest['Close']) - latest['Low']
+    upper_shadow = latest['High'] - max(latest['Open'], latest['Close'])
+
+    if body < candle_range * 0.3 and lower_shadow > 2 * body:
+        patterns.append("Hammer")
+    if abs(latest['Close'] - latest['Open']) < candle_range * 0.1:
+        patterns.append("Doji")
+
+    return patterns
 
 def calculate_indicators(df):
     df['rsi'] = ta.momentum.RSIIndicator(close=df['Close'], window=14).rsi().values.ravel()
@@ -27,38 +36,22 @@ def calculate_indicators(df):
     bb = ta.volatility.BollingerBands(close=df['Close'], window=20)
     df['bb_upper'] = bb.bollinger_hband().values.ravel()
     df['bb_lower'] = bb.bollinger_lband().values.ravel()
-    df['volume'] = df['Volume'].rolling(window=5).mean().fillna(df['Volume']).values.ravel()
     return df
-
-
-def detect_strategies(row):
-    tags = []
-    if row['rsi'] < 35:
-        tags.append("RSI_Oversold")
-    if row['rsi'] > 70:
-        tags.append("RSI_Overbought")
-    if row['ema5'] > row['ema20']:
-        tags.append("EMA_Bullish_Crossover")
-    if row['macd'] > row['macd_signal']:
-        tags.append("MACD_Bullish")
-    if row['Close'] > row['bb_upper']:
-        tags.append("Breakout_BB_Upper")
-    if row['volume'] > 1.5 * row['volume'].mean():
-        tags.append("Volume_Spike")
-    return tags
 
 def main():
     signals = []
+    os.makedirs("data", exist_ok=True)
     model = load_model(MODEL_FILE)
+    tickers = get_top_movers(20)
 
-    for ticker in WATCHLIST:
+    for ticker in tickers:
         try:
-            df = yf.download(ticker, period="3mo", interval="1d", progress=False)
-            if len(df) < 30:
+            df = get_ohlcv(ticker)
+            if df.empty or len(df) < 30:
                 continue
-
             df = calculate_indicators(df)
             latest = df.iloc[-1]
+            reversals = detect_bullish_reversal(df)
 
             features = {
                 "rsi": latest["rsi"],
@@ -66,27 +59,24 @@ def main():
                 "macd_signal": latest["macd_signal"],
                 "ema5": latest["ema5"],
                 "ema20": latest["ema20"],
-                "volume": latest["volume"]
+                "volume": latest["Volume"]
             }
 
             X = pd.DataFrame([features])
             proba = model.predict_proba(X)[0][1]
 
-            strategy_tags = detect_strategies(latest)
-            if proba >= 0.85:
+            if reversals and proba > 0.8:
                 signals.append({
                     "ticker": ticker,
-                    "confidence": round(proba * 100, 2),
                     "date": datetime.utcnow().strftime("%Y-%m-%d"),
-                    "reason": ", ".join(strategy_tags),
-                    "strategy_tags": strategy_tags,
+                    "confidence": round(proba * 100, 2),
+                    "reason": ", ".join(reversals),
                     "chart_url": f"https://www.tradingview.com/symbols/{ticker}/"
                 })
 
         except Exception as e:
             print(f"❌ Error scanning {ticker}: {e}")
 
-    os.makedirs("data", exist_ok=True)
     with open(SIGNALS_FILE, "w") as f:
         json.dump(signals, f, indent=2)
 
