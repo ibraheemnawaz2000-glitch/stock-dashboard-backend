@@ -2,6 +2,8 @@ import joblib
 import plotly.graph_objs as go
 import yfinance as yf
 from datetime import datetime, timedelta
+import pandas as pd
+import ta 
 
 # Load model
 def load_model(model_path="ml_stock_model.pkl"):
@@ -41,3 +43,13 @@ def generate_chart(ticker, days=30, save_html=False):
         return path
 
     return fig
+
+def calculate_indicators(df):
+    df['rsi'] = ta.momentum.RSIIndicator(close=df['Close'], window=14).rsi()
+    macd = ta.trend.MACD(close=df['Close'])
+    df['macd'] = macd.macd()
+    df['macd_signal'] = macd.macd_signal()
+    df['ema5'] = ta.trend.EMAIndicator(close=df['Close'], window=5).ema_indicator()
+    df['ema20'] = ta.trend.EMAIndicator(close=df['Close'], window=20).ema_indicator()
+    df['volume'] = df['Volume']
+    return df
