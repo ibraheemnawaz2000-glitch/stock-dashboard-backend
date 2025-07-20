@@ -45,11 +45,24 @@ def generate_chart(ticker, days=30, save_html=False):
     return fig
 
 def calculate_indicators(df):
-    df['rsi'] = ta.momentum.RSIIndicator(close=df['Close'], window=14).rsi()
-    macd = ta.trend.MACD(close=df['Close'])
-    df['macd'] = macd.macd()
-    df['macd_signal'] = macd.macd_signal()
-    df['ema5'] = ta.trend.EMAIndicator(close=df['Close'], window=5).ema_indicator()
-    df['ema20'] = ta.trend.EMAIndicator(close=df['Close'], window=20).ema_indicator()
-    df['volume'] = df['Volume']
+    df["rsi"] = ta.momentum.RSIIndicator(close=df["Close"], window=14).rsi()
+
+    macd = ta.trend.MACD(close=df["Close"])
+    df["macd"] = macd.macd()
+    df["macd_signal"] = macd.macd_signal()
+
+    df["ema5"] = ta.trend.EMAIndicator(close=df["Close"], window=5).ema_indicator()
+    df["ema20"] = ta.trend.EMAIndicator(close=df["Close"], window=20).ema_indicator()
+
+    bb = ta.volatility.BollingerBands(close=df["Close"], window=20)
+    df["bb_upper"] = bb.bollinger_hband().squeeze()  # <-- flatten if needed
+    df["bb_lower"] = bb.bollinger_lband().squeeze()
+
+    df["volume"] = df["Volume"]
+
+    # Also flatten any others that might return 2D arrays
+    df["macd"] = df["macd"].squeeze()
+    df["macd_signal"] = df["macd_signal"].squeeze()
+    df["rsi"] = df["rsi"].squeeze()
+
     return df
