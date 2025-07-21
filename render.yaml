@@ -1,5 +1,3 @@
-# render.yaml
-
 services:
   # The FastAPI Web Service for the backend API
   - type: web
@@ -9,13 +7,16 @@ services:
     autoDeploy: true
     buildCommand: "pip install -r requirements.txt"
     startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
-    envVarGroups:
-      - name: API # This links the service to your 'API' environment group
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.4
-      - key: DATA_DIR # So the API knows where to find the JSON file
+      - key: DATA_DIR
         value: /var/data
+      # Secrets are inherited from the linked environment group
+      - key: POLYGON_API_KEY
+        fromGroup: API
+      - key: OPENAI_API_KEY
+        fromGroup: API
 
   # The Python Background Worker for scanning signals
   - type: worker
@@ -25,12 +26,15 @@ services:
     autoDeploy: true
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python scan.py"
-    envVarGroups:
-      - name: API # This links the service to your 'API' environment group
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.4
-    # Add a persistent disk to store the signals.json file
+      # Secrets are inherited from the linked environment group
+      - key: POLYGON_API_KEY
+        fromGroup: API
+      - key: OPENAI_API_KEY
+        fromGroup: API
+    # The 'disks' property is at the same level as 'type', 'name', etc.
     disks:
       - name: data-store
         mountPath: /var/data
