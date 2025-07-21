@@ -1,1 +1,22 @@
-[]
+[
+    {
+        "ticker": "STLA",
+        "confidence": 100.0,
+        "date": "2025-07-21",
+        "reason": "The stock ticker STLA has recently shown a promising Bullish Engulfing pattern, indicating a potential reversal from recent downtrends and a strong buying interest. With the current support established near $9.03 and resistance at $10.54, the stock has room to appreciate, suggesting an optimistic outlook for near-term price movement.",
+        "tags": [
+            "Bullish Engulfing"
+        ],
+        "chart_url": "charts/STLA_chart.html"
+    },
+    {
+        "ticker": "QMMM",
+        "confidence": 100.0,
+        "date": "2025-07-21",
+        "reason": "The stock ticker QMMM presents a bullish opportunity as it recently exhibited a Hammer pattern, suggesting a potential reversal upwards. With current support established at $1.35 and resistance at $2.35, the stock has room for significant upward movement, making it an attractive buy for investors looking for growth.",
+        "tags": [
+            "Hammer"
+        ],
+        "chart_url": "charts/QMMM_chart.html"
+    }
+]

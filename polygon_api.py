@@ -1,52 +1,72 @@
 # polygon_api.py
 
 import requests
+import os
 from datetime import datetime, timedelta
 import pandas as pd
+from dotenv import load_dotenv
 
-API_KEY = "u2BVZaKDdPX8QTUD3TR31yMl1ZtbdnDB"
+load_dotenv()
+
+API_KEY = os.getenv("POLYGON_API_KEY")
 BASE_URL = "https://api.polygon.io"
 
-
-def get_last_trading_day():
+def get_top_tickers_by_volume(limit=500):
     """
-    Returns the most recent trading day (skipping weekends).
+    Fetches the top US stock tickers sorted by the most recent day's trading volume.
     """
-    today = datetime.now()
-    while today.weekday() >= 5:  # 5 = Saturday, 6 = Sunday
-        today -= timedelta(days=1)
-    return today.strftime("%Y-%m-%d")
+    if not API_KEY:
+        raise ValueError("🚨 POLYGON_API_KEY not found. Please set it in your .env file.")
 
+    # Start from yesterday to ensure we get a day with complete data.
+    date_to_check = datetime.now() - timedelta(days=1)
 
-def get_top_movers(limit=25):
-    """
-    Fetches the top daily gainers by percent from Polygon.
-    """
-    today = get_last_trading_day()
-    url = f"{BASE_URL}/v2/aggs/grouped/locale/us/market/stocks/{today}?adjusted=true&apiKey={API_KEY}"
+    # Loop backwards to find the last valid trading day (in case of weekend/holiday)
+    for i in range(7):
+        day_str = (date_to_check - timedelta(days=i)).strftime('%Y-%m-%d')
+        print(f"📡 Checking for market data on {day_str}...")
 
-    response = requests.get(url)
-    results = response.json().get("results", [])
+        # Use the Grouped Daily Bars endpoint for market-wide data
+        url = f"{BASE_URL}/v2/aggs/grouped/locale/us/market/stocks/{day_str}?adjusted=true&apiKey={API_KEY}"
 
-    sorted_by_gain = sorted(results, key=lambda x: (x['c'] - x['o']) / x['o'] if x['o'] > 0 else 0, reverse=True)
-    tickers = [r['T'] for r in sorted_by_gain[:limit]]
-    print(f"📈 Top Movers from Polygon: {tickers}")
-    return tickers
+        try:
+            resp = requests.get(url)
+            resp.raise_for_status()
+            data = resp.json()
 
+            if "results" in data and data["resultsCount"] > 0:
+                print(f"✅ Found data for {day_str}. Processing...")
+                df = pd.DataFrame(data["results"])
 
-def get_ohlcv(ticker, days=60):
-    """
-    Fetches historical OHLCV data for a stock from Polygon.
-    """
+                # 'T' is the ticker symbol, 'v' is volume
+                df.rename(columns={'T': 'ticker', 'v': 'volume'}, inplace=True)
+
+                # Sort by volume and get the top tickers
+                sorted_df = df.sort_values(by="volume", ascending=False)
+                top_tickers = sorted_df.head(limit)['ticker'].tolist()
+
+                print(f"📦 Loaded {len(top_tickers)} US tickers sorted by volume.")
+                return top_tickers
+
+        except requests.exceptions.RequestException as e:
+            print(f"API Request Failed: {e}")
+            continue # Try the previous day
+
+    print("❌ Could not find any trading data in the last 7 days.")
+    return []
+
+def get_ohlcv(ticker, days=90):
+    """Fetches OHLCV data for a single ticker."""
     end = datetime.now()
     start = end - timedelta(days=days)
     url = (
         f"{BASE_URL}/v2/aggs/ticker/{ticker}/range/1/day/"
-        f"{start.strftime('%Y-%m-%d')}/{end.strftime('%Y-%m-%d')}?adjusted=true&sort=asc&limit=120&apiKey={API_KEY}"
+        f"{start.strftime('%Y-%m-%d')}/{end.strftime('%Y-%m-%d')}?adjusted=true&sort=asc&limit={days}&apiKey={API_KEY}"
     )
-
     response = requests.get(url)
+    response.raise_for_status()
     data = response.json().get("results", [])
+
     if not data:
         return pd.DataFrame()
 

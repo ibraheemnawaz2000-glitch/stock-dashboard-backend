@@ -1,28 +1,36 @@
 # render.yaml
 
 services:
-  # The FastAPI Web Service
+  # The FastAPI Web Service for the backend API
   - type: web
     name: stock-dashboard-backend
     env: python
+    plan: free # Explicitly set the plan
+    autoDeploy: true # Automatically deploy on git push
     buildCommand: "pip install -r requirements.txt"
     startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
+    envVarGroups:
+      - name: API # <-- This links the service to your 'API' environment group
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.4
       - key: POLYGON_API_KEY
-        fromSecret: true # Will use secrets set in the Render dashboard
+        fromSecret: true
       - key: OPENAI_API_KEY
         fromSecret: true
-      - key: DATA_DIR # So the API knows where to find the JSON file
-        value: /var/data
+      - key: DATA_DIR
+        value: /var/data # Path for the persistent disk
 
-  # The Python Background Worker
+  # The Python Background Worker for scanning signals
   - type: worker
     name: signal-scanner
     env: python
+    plan: free # Explicitly set the plan
+    autoDeploy: true # Automatically deploy on git push
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python scan.py"
+    envVarGroups:
+      - name: API # <-- This links the service to your 'API' environment group
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.4
@@ -30,7 +38,7 @@ services:
         fromSecret: true
       - key: OPENAI_API_KEY
         fromSecret: true
-    # Add a persistent disk to store data
+    # Add a persistent disk to store the signals.json file
     disks:
       - name: data-store
         mountPath: /var/data

@@ -1,8 +1,11 @@
-from fastapi import FastAPI
+# main.py
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import json
-from ml_utils import load_model, score_signal, generate_chart
 import os
+from ml_utils import generate_chart
 
 app = FastAPI()
 
@@ -13,24 +16,43 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-model = None
-
+SIGNALS_FILE = "data/signals.json"
+CHARTS_DIR = "charts"
 
 @app.get("/signals")
 def get_signals():
-    try:
-        with open("data/signals.json", "r") as f:
-            signals = json.load(f)
-        for signal in signals:
-            reason = signal.get("reason", "")
-            signal["confidence_score"] = "N/A"
-            chart_path = f"charts/{signal['ticker']}_chart.html"
-            if not os.path.exists(chart_path):
-                try:
-                    generate_chart(signal["ticker"], save_html=True)
-                except:
-                    continue
-            signal["chart_url"] = f"charts/{signal['ticker']}_chart.html"
-        return signals
-    except FileNotFoundError:
-        return {"message": "No signals yet."}
+    """
+    Reads signals from the JSON file and ensures charts are generated.
+    """
+    if not os.path.exists(SIGNALS_FILE):
+        return {"message": "No signals file found. Run the scanner first."}
+
+    with open(SIGNALS_FILE, "r") as f:
+        signals = json.load(f)
+
+    # Ensure charts exist for each signal
+    for signal in signals:
+        ticker = signal["ticker"]
+        chart_path = os.path.join(CHARTS_DIR, f"{ticker}_chart.html")
+        if not os.path.exists(chart_path):
+            print(f"Chart for {ticker} not found, generating now...")
+            try:
+                # Generate chart using the consistent utility function
+                generate_chart(ticker, save_html=True)
+            except Exception as e:
+                print(f"Could not generate chart for {ticker}: {e}")
+                # If chart fails, link to a fallback or note it's unavailable
+                signal["chart_url"] = None 
+    
+    return signals
+
+@app.get("/charts/{ticker}_chart.html")
+def get_chart(ticker: str):
+    """
+    Serves the generated HTML chart file for a specific ticker.
+    """
+    chart_path = os.path.join(CHARTS_DIR, f"{ticker}_chart.html")
+    if not os.path.exists(chart_path):
+        raise HTTPException(status_code=404, detail="Chart not found.")
+    
+    return FileResponse(chart_path)
