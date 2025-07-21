@@ -1,7 +1,7 @@
-# A clean and validated render.yaml file
+# render.yaml
+# This version has been validated for correct indentation.
 
 services:
-  # Service 1: The FastAPI Web Service
   - name: stock-dashboard-backend
     type: web
     env: python
@@ -9,18 +9,14 @@ services:
     autoDeploy: true
     buildCommand: "pip install -r requirements.txt"
     startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
+    envVarGroups:
+      - name: API
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.4
       - key: DATA_DIR
         value: /var/data
-      # Inherit secrets from the 'API' Environment Group
-      - key: POLYGON_API_KEY
-        fromGroup: API
-      - key: OPENAI_API_KEY
-        fromGroup: API
 
-  # Service 2: The Background Worker
   - name: signal-scanner
     type: worker
     env: python
@@ -28,16 +24,12 @@ services:
     autoDeploy: true
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python scan.py"
-    # The 'disks' property must be at this indentation level
     disks:
       - name: data-store
         mountPath: /var/data
         sizeGB: 1
+    envVarGroups:
+      - name: API
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.4
-      # Inherit secrets from the 'API' Environment Group
-      - key: POLYGON_API_KEY
-        fromGroup: API
-      - key: OPENAI_API_KEY
-        fromGroup: API
