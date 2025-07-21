@@ -1,7 +1,9 @@
+# A clean and validated render.yaml file
+
 services:
-  # The FastAPI Web Service for the backend API
-  - type: web
-    name: stock-dashboard-backend
+  # Service 1: The FastAPI Web Service
+  - name: stock-dashboard-backend
+    type: web
     env: python
     plan: free
     autoDeploy: true
@@ -12,30 +14,30 @@ services:
         value: 3.11.4
       - key: DATA_DIR
         value: /var/data
-      # Secrets are inherited from the linked environment group
+      # Inherit secrets from the 'API' Environment Group
       - key: POLYGON_API_KEY
         fromGroup: API
       - key: OPENAI_API_KEY
         fromGroup: API
 
-  # The Python Background Worker for scanning signals
-  - type: worker
-    name: signal-scanner
+  # Service 2: The Background Worker
+  - name: signal-scanner
+    type: worker
     env: python
     plan: free
     autoDeploy: true
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python scan.py"
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.4
-      # Secrets are inherited from the linked environment group
-      - key: POLYGON_API_KEY
-        fromGroup: API
-      - key: OPENAI_API_KEY
-        fromGroup: API
-    # The 'disks' property is at the same level as 'type', 'name', etc.
+    # The 'disks' property must be at this indentation level
     disks:
       - name: data-store
         mountPath: /var/data
         sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.4
+      # Inherit secrets from the 'API' Environment Group
+      - key: POLYGON_API_KEY
+        fromGroup: API
+      - key: OPENAI_API_KEY
+        fromGroup: API
