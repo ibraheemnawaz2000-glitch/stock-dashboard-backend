@@ -3,9 +3,9 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-import json
-import os
+from models import SessionLocal, Signal
 from ml_utils import generate_chart
+import os
 
 app = FastAPI()
 
@@ -15,45 +15,44 @@ app.add_middleware(
     allow_methods=["*"],
 )
 
-# --- FIX: Define paths using the persistent data directory ---
-# On Render, this will be '/var/data'. Locally, it will be 'data'.
-DATA_DIR = os.getenv("DATA_DIR", "data")
-SIGNALS_FILE = os.path.join(DATA_DIR, "signals.json")
-# Store charts on the persistent disk as well
-CHARTS_DIR = os.path.join(DATA_DIR, "charts")
-
+# Define chart storage path
+CHARTS_DIR = os.getenv("CHARTS_DIR", "charts")
+os.makedirs(CHARTS_DIR, exist_ok=True)
 
 @app.get("/signals")
 def get_signals():
     """
-    Reads signals from the JSON file and ensures charts are generated.
+    Reads signals from PostgreSQL and ensures charts are available.
     """
-    if not os.path.exists(SIGNALS_FILE):
-        return {"message": "No signals file found. The scanner may not have run yet."}
+    db = SessionLocal()
+    signals = db.query(Signal).order_by(Signal.date.desc()).limit(50).all()
+    db.close()
 
-    with open(SIGNALS_FILE, "r") as f:
-        signals = json.load(f)
+    result = []
+    for s in signals:
+        ticker = s.ticker
+        chart_filename = f"{ticker}_chart.html"
+        chart_path = os.path.join(CHARTS_DIR, chart_filename)
 
-    # Ensure the charts directory exists before generating charts
-    os.makedirs(CHARTS_DIR, exist_ok=True)
-
-    for signal in signals:
-        ticker = signal["ticker"]
-        chart_path = os.path.join(CHARTS_DIR, f"{ticker}_chart.html")
-        
-        # Update the chart_url to be served by our API
-        signal["chart_url"] = f"/charts/{ticker}_chart.html"
-
+        # Ensure chart exists
         if not os.path.exists(chart_path):
             print(f"Chart for {ticker} not found, generating now...")
             try:
-                # Pass the full path for saving the chart
                 generate_chart(ticker, save_path=chart_path)
             except Exception as e:
                 print(f"Could not generate chart for {ticker}: {e}")
-                signal["chart_url"] = None
-    
-    return signals
+                chart_path = None
+
+        result.append({
+            "ticker": ticker,
+            "confidence_score": s.confidence,
+            "date": s.date.strftime("%Y-%m-%d"),
+            "reason": s.reason,
+            "tags": s.tags,
+            "chart_url": f"/charts/{ticker}_chart.html" if chart_path else None
+        })
+
+    return result
 
 
 @app.get("/charts/{ticker}_chart.html")
