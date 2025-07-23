@@ -10,6 +10,8 @@ from indicator_utils import calculate_indicators, detect_strategies, calculate_s
 from gpt_utils import generate_gpt_reasoning
 from ml_utils import load_model
 import pandas as pd
+from dotenv import load_dotenv
+load_dotenv()
 
 load_dotenv()
 MODEL_FILE = "ml_stock_model.pkl"
@@ -51,7 +53,7 @@ def run_scan():
             X = pd.DataFrame([features])
             proba = model.predict_proba(X)[0][1]
 
-            if proba >= 0.75:
+            if proba >= 0.6:
                 print(f"📈 Signal: {ticker} | Confidence: {proba:.2f}")
                 gpt_reason = generate_gpt_reasoning(ticker, tags, support, resistance)
 
