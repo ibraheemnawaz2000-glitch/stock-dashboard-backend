@@ -58,20 +58,31 @@ def save_signals_to_csv(signals_list, filename):
     except IOError as e:
         print(f"❌ Error writing to file {filename}: {e}")
 
-
 def run_scan():
     """
     Runs a scan for stock signals and saves them to the database and a local CSV file.
     """
     print("--- Starting a new scan cycle ---")
+
+    # Check if the model file exists on Render
+    if not os.path.exists(MODEL_FILE):
+        print(f"❌ CRITICAL: Model file not found at '{MODEL_FILE}'")
+        return
+    else:
+        print(f"✅ Found model file at '{MODEL_FILE}'")
+        
     db = SessionLocal()
     model = load_model(MODEL_FILE)
     tickers = get_top_tickers_by_volume(limit=500)
+    print(f"Found {len(tickers)} tickers to analyze.") # <-- ADDED
     signals = []
 
-    for ticker in tickers:
+    for i, ticker in enumerate(tickers): # Use enumerate for better logging
         try:
-            # Fetch and prepare data
+            # Add logging to see progress
+            if (i + 1) % 50 == 0:
+                print(f"--> Processing ticker {i+1}/{len(tickers)}: {ticker}") # <-- ADDED
+
             df = get_ohlcv(ticker, days=60)
             if df.empty or len(df) < 30:
                 continue
@@ -98,15 +109,19 @@ def run_scan():
             X = pd.DataFrame([features])
             proba = model.predict_proba(X)[0][1]
 
+            # Temporarily log all probabilities to see what scores you're getting
+            if proba > 0.5: # Lower the threshold just for debugging
+                print(f"    Ticker: {ticker}, Probability: {proba:.2f}") # <-- ADDED
+
             # If confidence is high, generate reasoning and create a signal
             if proba >= 0.8:
-                print(f"📈 Signal: {ticker} | Confidence: {proba:.2f}")
+                print(f"📈 Signal FOUND: {ticker} | Confidence: {proba:.2f}")
                 gpt_reason = generate_gpt_reasoning(ticker, tags, support, resistance)
 
                 signal = Signal(
                     ticker=ticker,
                     confidence=round(proba * 100, 2),
-                    date=datetime.utcnow(), # Use datetime object for now
+                    date=datetime.now(datetime.UTC), # Use timezone-aware datetime
                     reason=gpt_reason,
                     tags=tag_str,
                     chart_url=f"charts/{ticker}_chart.html"
@@ -115,7 +130,6 @@ def run_scan():
                 signals.append(signal)
 
         except Exception as e:
-            # It's good practice to catch specific exceptions, but this is a fallback
             print(f"❌ Error processing {ticker}: {e}")
     
     # --- Save signals to Database and Local File ---
@@ -124,7 +138,7 @@ def run_scan():
         print(f"✅ Scan complete. Saved {len(signals)} signals to the database.")
 
         # Save to local file BEFORE closing the session
-        today_str = datetime.utcnow().strftime('%Y-%m-%d')
+        today_str = datetime.now(datetime.UTC).strftime('%Y-%m-%d')
         filename = os.path.join(SIGNALS_DIR, f"signals_{today_str}.csv")
         save_signals_to_csv(signals, filename)
         print(f"📄 Also saved {len(signals)} signals to local file: {filename}")
@@ -133,6 +147,7 @@ def run_scan():
 
     # Close the session after all operations are complete
     db.close()
+
 
 
 if __name__ == "__main__":

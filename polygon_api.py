@@ -19,7 +19,7 @@ def get_top_tickers_by_volume(limit=500):
         raise ValueError("🚨 POLYGON_API_KEY not found. Please set it in your .env file.")
 
     # Start from yesterday to ensure we get a day with complete data.
-    date_to_check = datetime.now() - timedelta(days=1)
+    date_to_check = datetime.now()
 
     # Loop backwards to find the last valid trading day (in case of weekend/holiday)
     for i in range(7):
