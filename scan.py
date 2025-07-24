@@ -1,6 +1,6 @@
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 import pandas as pd
 from dotenv import load_dotenv
 from models import Signal, SessionLocal, engine
@@ -54,9 +54,8 @@ def run_scan():
     db = SessionLocal()
     model = load_model(MODEL_FILE)
     
-    # --- CRITICAL CHANGE FOR RENDER ---
-    # Reduced limit from 500 to 50 to avoid memory issues on Render's free tier.
-    tickers = get_top_tickers_by_volume(limit=50) 
+    # Reduced limit to avoid memory issues on free cloud hosting tiers.
+    tickers = get_top_tickers_by_volume(limit=250) 
     print(f"Found {len(tickers)} tickers to analyze.")
     signals = []
 
@@ -100,7 +99,7 @@ def run_scan():
                 signal = Signal(
                     ticker=ticker,
                     confidence=round(proba * 100, 2),
-                    date=datetime.now(datetime.UTC),
+                    date=datetime.now(timezone.utc), # Use timezone.utc for compatibility
                     reason=gpt_reason,
                     tags=tag_str,
                     chart_url=f"charts/{ticker}_chart.html"
@@ -114,7 +113,7 @@ def run_scan():
     if signals:
         db.commit()
         print(f"✅ Scan complete. Saved {len(signals)} signals to the database.")
-        today_str = datetime.now(datetime.UTC).strftime('%Y-%m-%d')
+        today_str = datetime.now(timezone.utc).strftime('%Y-%m-%d') # Use timezone.utc for compatibility
         filename = os.path.join(SIGNALS_DIR, f"signals_{today_str}.csv")
         save_signals_to_csv(signals, filename)
         print(f"📄 Also saved {len(signals)} signals to local file: {filename}")
