@@ -1,13 +1,13 @@
 import os
 import time
 from datetime import datetime
+import pandas as pd
 from dotenv import load_dotenv
 from models import Signal, SessionLocal, engine
 from polygon_api import get_top_tickers_by_volume, get_ohlcv
 from indicator_utils import calculate_indicators, detect_strategies, calculate_support_resistance, detect_candles
 from gpt_utils import generate_gpt_reasoning
 from ml_utils import load_model
-import pandas as pd
 
 load_dotenv()
 MODEL_FILE = "ml_stock_model.pkl"
@@ -22,37 +22,18 @@ if not os.path.exists(SIGNALS_DIR):
 def save_signals_to_csv(signals_list, filename):
     """
     Saves a list of signal objects to a CSV file.
-
-    This function converts the list of signal objects into a pandas DataFrame
-    and appends it to the specified CSV file. If the file doesn't exist,
-    it will be created with a header.
-
-    Args:
-        signals_list (list): A list of Signal objects to save.
-        filename (str): The path to the CSV file.
     """
     if not signals_list:
         return
-
-    # Convert the list of Signal objects into a list of dictionaries
     data = [
         {
-            "date": s.date.strftime('%Y-%m-%d %H:%M:%S'),
-            "ticker": s.ticker,
-            "confidence": s.confidence,
-            "tags": s.tags,
-            "reason": s.reason,
+            "date": s.date.strftime('%Y-%m-%d %H:%M:%S'), "ticker": s.ticker,
+            "confidence": s.confidence, "tags": s.tags, "reason": s.reason,
             "chart_url": s.chart_url,
-        }
-        for s in signals_list
+        } for s in signals_list
     ]
     df = pd.DataFrame(data)
-
-    # Check if the file already exists to determine if we need to write the header
     file_exists = os.path.isfile(filename)
-
-    # Append to the CSV file. Use mode='a' for append.
-    # The header is only written if the file does not exist.
     try:
         df.to_csv(filename, mode='a', header=not file_exists, index=False)
     except IOError as e:
@@ -64,7 +45,6 @@ def run_scan():
     """
     print("--- Starting a new scan cycle ---")
 
-    # Check if the model file exists on Render
     if not os.path.exists(MODEL_FILE):
         print(f"❌ CRITICAL: Model file not found at '{MODEL_FILE}'")
         return
@@ -73,21 +53,22 @@ def run_scan():
         
     db = SessionLocal()
     model = load_model(MODEL_FILE)
-    tickers = get_top_tickers_by_volume(limit=500)
-    print(f"Found {len(tickers)} tickers to analyze.") # <-- ADDED
+    
+    # --- CRITICAL CHANGE FOR RENDER ---
+    # Reduced limit from 500 to 50 to avoid memory issues on Render's free tier.
+    tickers = get_top_tickers_by_volume(limit=50) 
+    print(f"Found {len(tickers)} tickers to analyze.")
     signals = []
 
-    for i, ticker in enumerate(tickers): # Use enumerate for better logging
+    for i, ticker in enumerate(tickers):
         try:
-            # Add logging to see progress
-            if (i + 1) % 50 == 0:
-                print(f"--> Processing ticker {i+1}/{len(tickers)}: {ticker}") # <-- ADDED
+            if (i + 1) % 10 == 0: # Log every 10 tickers
+                print(f"--> Processing ticker {i+1}/{len(tickers)}: {ticker}")
 
             df = get_ohlcv(ticker, days=60)
             if df.empty or len(df) < 30:
                 continue
 
-            # Calculate indicators and features
             df = calculate_indicators(df)
             support, resistance = calculate_support_resistance(df)
             candle_tags = detect_candles(df)
@@ -109,11 +90,9 @@ def run_scan():
             X = pd.DataFrame([features])
             proba = model.predict_proba(X)[0][1]
 
-            # Temporarily log all probabilities to see what scores you're getting
-            if proba > 0.5: # Lower the threshold just for debugging
-                print(f"    Ticker: {ticker}, Probability: {proba:.2f}") # <-- ADDED
+            if proba > 0.5:
+                print(f"    Ticker: {ticker}, Probability: {proba:.2f}")
 
-            # If confidence is high, generate reasoning and create a signal
             if proba >= 0.8:
                 print(f"📈 Signal FOUND: {ticker} | Confidence: {proba:.2f}")
                 gpt_reason = generate_gpt_reasoning(ticker, tags, support, resistance)
@@ -121,7 +100,7 @@ def run_scan():
                 signal = Signal(
                     ticker=ticker,
                     confidence=round(proba * 100, 2),
-                    date=datetime.now(datetime.UTC), # Use timezone-aware datetime
+                    date=datetime.now(datetime.UTC),
                     reason=gpt_reason,
                     tags=tag_str,
                     chart_url=f"charts/{ticker}_chart.html"
@@ -132,12 +111,9 @@ def run_scan():
         except Exception as e:
             print(f"❌ Error processing {ticker}: {e}")
     
-    # --- Save signals to Database and Local File ---
     if signals:
         db.commit()
         print(f"✅ Scan complete. Saved {len(signals)} signals to the database.")
-
-        # Save to local file BEFORE closing the session
         today_str = datetime.now(datetime.UTC).strftime('%Y-%m-%d')
         filename = os.path.join(SIGNALS_DIR, f"signals_{today_str}.csv")
         save_signals_to_csv(signals, filename)
@@ -145,12 +121,10 @@ def run_scan():
     else:
         print("✅ Scan complete. No new signals found.")
 
-    # Close the session after all operations are complete
     db.close()
 
-
-
 if __name__ == "__main__":
+    print("🚀 Script starting up...") # Added to confirm script execution starts
     while True:
         run_scan()
         print("💤 Sleeping for 30 minutes...")
