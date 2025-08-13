@@ -1,4 +1,4 @@
-# app/main.py (v1.3.2)
+# app/main.py (v1.3.3)
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List
@@ -20,7 +20,7 @@ except Exception:
 
 LONDON = zoneinfo.ZoneInfo("Europe/London")
 
-app = FastAPI(title="Tradia Signals API", version="1.3.2")
+app = FastAPI(title="Tradia Signals API", version="1.3.3")
 
 app.add_middleware(
     CORSMiddleware,
@@ -57,26 +57,45 @@ def _latest_outcome(db, signal_id):
     return db.execute(q).scalars().first()
 
 
+def _as_list(v):
+    if v is None:
+        return []
+    if isinstance(v, list):
+        return v
+    # try to coerce simple comma-separated strings if ever present
+    if isinstance(v, str):
+        return [s.strip() for s in v.split(",") if s.strip()]
+    return []
+
+
 def _serialize_signal(sig: Signal, outcome: Optional[Outcome]) -> Dict[str, Any]:
     indicators = sig.indicators_json or {}
 
     # Lift commonly-used fields to top-level for convenience
-    sector    = indicators.get("sector")
-    timeframe = indicators.get("timeframe")              # e.g., "15m" or "1d"
-    ml_proba  = _num(indicators.get("ml_proba"))
-    support   = _num(indicators.get("support"))
-    resistance= _num(indicators.get("resistance"))
+    sector     = indicators.get("sector")
+    timeframe  = indicators.get("timeframe")              # e.g., "15m" or "1d"
+    ml_proba   = _num(indicators.get("ml_proba"))
+    support    = _num(indicators.get("support"))
+    resistance = _num(indicators.get("resistance"))
+
+    # NEW: also expose tags at the top level
+    strategy_tags = _as_list(indicators.get("strategy_tags"))
+    candle_tags   = _as_list(indicators.get("candle_tags"))
+    all_tags      = _as_list(indicators.get("all_tags")) or (strategy_tags + [t for t in candle_tags if t not in strategy_tags])
 
     return {
         "id": str(sig.id),
         "created_at": sig.created_at.isoformat() if sig.created_at else None,
         "ticker": sig.ticker,
         "company_name": indicators.get("company_name"),
-        "sector": sector,                 # NEW top-level
-        "timeframe": timeframe,           # NEW top-level
-        "ml_proba": ml_proba,            # NEW top-level
-        "support": support,              # NEW top-level
-        "resistance": resistance,        # NEW top-level
+        "sector": sector,                 # top-level
+        "timeframe": timeframe,           # top-level
+        "ml_proba": ml_proba,            # top-level
+        "support": support,              # top-level
+        "resistance": resistance,        # top-level
+        "all_tags": all_tags,            # NEW top-level
+        "strategy_tags": strategy_tags,  # NEW top-level
+        "candle_tags": candle_tags,      # NEW top-level
         "price_at_signal": _num(sig.price_at_signal),
         "target_price": _num(sig.target_price),
         "stop_loss": _num(sig.stop_loss),
@@ -84,7 +103,7 @@ def _serialize_signal(sig: Signal, outcome: Optional[Outcome]) -> Dict[str, Any]
         "gpt_rank": sig.gpt_rank,
         "is_top_pick": sig.is_top_pick,
         "horizon_days": sig.horizon_days,
-        "indicators": indicators,        # still includes nested values for backward-compat
+        "indicators": indicators,        # still present for backward-compat
         "reason": sig.reason_json,
         "window_tag": sig.window_tag,
         "outcome": {
@@ -314,4 +333,5 @@ def get_chart(ticker: str):
             raise HTTPException(status_code=500, detail=f"Failed to generate chart: {e}")
 
     return FileResponse(chart_path)
+
 
