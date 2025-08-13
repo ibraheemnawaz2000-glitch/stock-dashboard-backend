@@ -1,4 +1,4 @@
-# app/main.py (patched: v1.3 → v1.3.1)
+# app/main.py (v1.3.2)
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List
@@ -20,7 +20,7 @@ except Exception:
 
 LONDON = zoneinfo.ZoneInfo("Europe/London")
 
-app = FastAPI(title="Tradia Signals API", version="1.3.1")
+app = FastAPI(title="Tradia Signals API", version="1.3.2")
 
 app.add_middleware(
     CORSMiddleware,
@@ -59,16 +59,24 @@ def _latest_outcome(db, signal_id):
 
 def _serialize_signal(sig: Signal, outcome: Optional[Outcome]) -> Dict[str, Any]:
     indicators = sig.indicators_json or {}
-    # NEW: lift sector & timeframe to top-level for easy frontend access
-    sector = indicators.get("sector")
-    timeframe = indicators.get("timeframe")
+
+    # Lift commonly-used fields to top-level for convenience
+    sector    = indicators.get("sector")
+    timeframe = indicators.get("timeframe")              # e.g., "15m" or "1d"
+    ml_proba  = _num(indicators.get("ml_proba"))
+    support   = _num(indicators.get("support"))
+    resistance= _num(indicators.get("resistance"))
+
     return {
         "id": str(sig.id),
         "created_at": sig.created_at.isoformat() if sig.created_at else None,
         "ticker": sig.ticker,
         "company_name": indicators.get("company_name"),
-        "sector": sector,                 # <— NEW
-        "timeframe": timeframe,           # <— NEW (e.g., "15m" or "1d")
+        "sector": sector,                 # NEW top-level
+        "timeframe": timeframe,           # NEW top-level
+        "ml_proba": ml_proba,            # NEW top-level
+        "support": support,              # NEW top-level
+        "resistance": resistance,        # NEW top-level
         "price_at_signal": _num(sig.price_at_signal),
         "target_price": _num(sig.target_price),
         "stop_loss": _num(sig.stop_loss),
@@ -76,7 +84,7 @@ def _serialize_signal(sig: Signal, outcome: Optional[Outcome]) -> Dict[str, Any]
         "gpt_rank": sig.gpt_rank,
         "is_top_pick": sig.is_top_pick,
         "horizon_days": sig.horizon_days,
-        "indicators": indicators,
+        "indicators": indicators,        # still includes nested values for backward-compat
         "reason": sig.reason_json,
         "window_tag": sig.window_tag,
         "outcome": {
@@ -306,3 +314,4 @@ def get_chart(ticker: str):
             raise HTTPException(status_code=500, detail=f"Failed to generate chart: {e}")
 
     return FileResponse(chart_path)
+
